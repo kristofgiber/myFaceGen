@@ -1,0 +1,100 @@
+
+# tensorflow for cpu
+
+# docker build --tag deeplearning:tf2 - < /Users/user/Code/Workspace_AI/PythonProjects/startup_repo/System_setup/Docker/Dockerfile_deeplearning_TF2
+# docker run -it -v /Users/user/Code/Workspace_AI/PythonProjects:/home -v /Users/user/.gitconfig:/root/.gitconfig:ro --name deep-learning-tf2 deeplearning:tf2
+
+# And to run Tensorflow-model-server (TensorFlow Serving) and test remote inference with it, we need to bind the
+# rest-api port (8501) of the container and the local machine (this way calling localhost:8501 will redirect to tensorflow server)
+# docker run -e MODEL_FILE=vae_model -v /Users/user/Code/Workspace_AI/PythonProjects/VAE/CelebA/Models/vae_model:/models/vae_model -v /Users/user/Code/Workspace_AI/PythonProjects:/home -p 8501:8501 --name deep-learning-tf2-tfserving deeplearning:tf2 sh /home/VAE/TF_Serving_VAE.sh
+
+
+FROM ubuntu:16.04
+# FROM ubuntu:16.04 as base
+
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    lsof \
+    apt-utils \
+    build-essential \
+    git \
+    nano \
+    less \
+    vim \
+    pkg-config \
+    git \
+    curl \
+    htop \
+    sysstat \
+    unzip \
+    firewalld
+
+# fix for Python3 installation(See http://bugs.python.org/issue19846)
+# ENV LANG C.UTF-8
+ARG _PY_SUFFIX="3"
+ARG PYTHON=python${_PY_SUFFIX}
+ARG PIP=pip${_PY_SUFFIX}
+
+
+RUN apt-get update && apt-get install -y \
+    ${PYTHON} \
+    ${PYTHON}-dev \
+    ${PYTHON}-tk \
+    ${PYTHON}-pip
+
+RUN ${PIP} install --upgrade \
+    pip \
+    setuptools
+
+# Some TF tools expect a "python" binary
+RUN ln -s $(which python) /usr/local/bin/python
+
+RUN ${PIP} install --upgrade --default-timeout=600 \
+    tensorflow==2.0.0-rc0 \
+    tensorflow_probability==0.8.0rc0
+
+# fixed numpy at 1.16 since 1.17 had incompatiblities with tf. Will be fixed in 1.18
+RUN ${PIP} install \
+    apache-beam[gcp] \
+    pillow==4.0.0 \
+    numpy==1.16.4 \
+    imageio \
+    matplotlib \
+    opencv-python \
+    object_detection
+
+# This is to install TensorFlow-Serving
+RUN apt-get install -y ca-certificates openssl sudo && apt-get update
+RUN echo "deb [arch=amd64] http://storage.googleapis.com/tensorflow-serving-apt stable tensorflow-model-server tensorflow-model-server-universal" | sudo tee /etc/apt/sources.list.d/tensorflow-serving.list && \
+    curl https://storage.googleapis.com/tensorflow-serving-apt/tensorflow-serving.release.pub.gpg | sudo apt-key add -
+RUN apt-get update && apt-get install tensorflow-model-server
+
+
+#RUN CLOUD_SDK_REPO="cloud-sdk-$(grep VERSION_CODENAME /etc/os-release | cut -d '=' -f 2)" && \
+#    echo "deb http://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+#    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
+#    apt-get update -y && apt-get install google-cloud-sdk -y
+
+# pip install google-cloud-storageex
+# pip install google-cloud-datastore
+
+
+#COPY arctic-moon-241623-bd07e0dc33d9.json /credentials/service-account-key.json
+#RUN chmod a+x /credentials/service-account-key.json
+
+# run command should mount the docker-entrypoint.sh file to a volume mapped to the path below.
+# this allows running any commands in the entrypoint script automatically upon entry and it can be
+# updated without having to re-build the image (unlike when we COPY the entry file during build)
+#ENTRYPOINT ["/buildcontext/docker-entrypoint.sh"]
+WORKDIR /home
+#RUN gcloud auth activate-service-account --project tensorflow-gcloud --key-file /home/arctic-moon-241623-bd07e0dc33d9.json
+#RUN (echo '1'; echo '1'; echo '1'; echo 'n') | gcloud init
+
+# TensorBoard
+EXPOSE 6006
+
+
+CMD ["/bin/bash"]
+
+# COPY bashrc /etc/bash.bashrc
+# RUN chmod a+rwx /etc/bash.bashrc
